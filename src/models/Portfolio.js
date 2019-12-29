@@ -114,11 +114,9 @@ const portfolioSchema = mongoose.Schema({
 
       //stocks: array of stock ids that this strategy is attached to.
       stocks: [{
-        stock: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: 'Stock',
-          required: true
-        }
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Stock',
+        required: true
       }]
     },
 
@@ -153,21 +151,19 @@ const portfolioSchema = mongoose.Schema({
       //netValue: historical array of the net liquidating value of the portfolio.
       netValue: [Number],
 
-      //contrHist: array of Contr objects, representing contributions/withdrawals to the account.
+      //contrHist: array of contributions, each representing a contribution/withdrawal to/from the account.
       contrHist: [{
-        contr: {
-          //date: JS date object, the date of the contribution or withdrawal. (Represented in milliseconds)
-          date: {
-            type: Date,
-            default: Date.now(),
-            required: true
-          },
+        //date: JS date object, the date of the contribution or withdrawal. (Represented in milliseconds)
+        date: {
+          type: Date,
+          default: Date.now(),
+          required: true
+        },
 
-          //amount: amount of the contribution or withdrawal; positive or negative accordingly.
-          amount: {
-            type: Number,
-            required: true
-          }
+        //amount: amount of the contribution or withdrawal; positive or negative accordingly.
+        amount: {
+          type: Number,
+          required: true
         }
       }]
     }

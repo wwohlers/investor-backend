@@ -21,15 +21,14 @@ const stockSchema = mongoose.Schema({
   },
   
   //targetAvg: portfolio target price average. Null means no target prices.
-  targetAvg: Number,
+  targetAvg: {
+    type: Number,
+    default: null
+  },
 
-  //buys: information about how many buys the stock has.
+  //buys: historical array of long pos minus short pos (counts). (0th element is today)
   buys: {
-    //net: historical array of the difference in pos. counts, i.e. + positions minus negative positions.
-    net: [Number],
-
-    //noBuys: historical array of the number of portfolios that have this stock in buys.
-    noBuys: [Number]
+    type: [Number],
   },
 
   //res: information about the number of res about the stock.

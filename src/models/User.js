@@ -41,6 +41,12 @@ const userSchema = mongoose.Schema({
     }
   }],
 
+  //admin: true if admin.
+  admin: {
+    type: Boolean,
+    default: false
+  },
+
   //portfolios: array of portfolio ids owned by the user.
   portfolios: [{
     type: mongoose.Schema.Types.ObjectId,

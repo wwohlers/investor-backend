@@ -6,10 +6,14 @@ const optauth = require('../middleware/optauth');
 
 const router = express.Router();
 
+// POST users
+// Registers a user
+// Takes user object
+// Gives the logged in user info and their generated token
 router.post('/users', async (req, res) => {
-    // Create a new user
     try {
         const user = new User(req.body);
+        user.admin = false;
         await user.save();
         const token = await user.generateAuthToken();
         res.status(201).send({ user, token });
@@ -18,8 +22,15 @@ router.post('/users', async (req, res) => {
     }
 })
 
+// POST users/login
+// Logs in a registered user
+// Takes 
+//  - email: user's email
+//  - password: password attempt
+// Gives
+//  - user: object of user logged in
+//  - token: access token just generated
 router.post('/users/login', async(req, res) => {
-    //Login a registered user
     try {
         const { email, password } = req.body;
         const user = await User.findByCredentials(email, password);
@@ -35,11 +46,15 @@ router.post('/users/login', async(req, res) => {
 
 })
 
+// GET users/me
+// Gets the user object of the current user
 router.get('/users/me', auth, async(req, res) => {
     // View logged in user profile
     res.send(req.user);
 })
 
+// POST users/me/logout
+// Logs out user from current device (deletes access token in request)
 router.post('/users/me/logout', auth, async (req, res) => {
     // Log user out of the application
     try {
@@ -53,6 +68,8 @@ router.post('/users/me/logout', auth, async (req, res) => {
     }
 })
 
+// POST users/me/logoutall
+// Logs out user from all devices (deletes all access tokens)
 router.post('/users/me/logoutall', auth, async(req, res) => {
 	// Log user out of all devices
 	try {
@@ -64,26 +81,45 @@ router.post('/users/me/logoutall', auth, async(req, res) => {
 	}
 })
 
-// users/p: gets all the portfolios owned by a given user.
-// takes 
+// GET users/:id
+// Gets info about the given user.
+// Params 
 //  - id: user id
-// gives
-//  - array of portfolio ids
-router.get('/users/p', async(req, res) => {
+// Gives user object
+router.get('/users/:id', async(req, res) => {
 	try {
-		const id = req.body.id;
-		User.findById(id, 'portfolios', function(err, user) {
+		const id = req.params.id;
+		User.findById(id, function(err, user) {
 			if (err) {
 				res.status(500).send(err);
 			} 
 			if (!user) {
 				res.status(400).send("User not found");
 			}
-			res.send(user.portfolios); 
+			res.send(user);
 		})
 	} catch (error) {
 		res.status(500).send(err);
 	}
+});
+
+// PUT /users/
+// Updates user
+router.put('/users/', auth, async(req, res) => {
+  try {
+    const user = req.body;
+    user.admin = false;
+    User.findById(id, function(err, u) {
+      if (err) {
+        res.status(500).send(err);
+        return;
+      }
+      u = user;
+      u.save();
+    })
+  } catch (error) {
+    res.status(500).send(error);
+  }
 })
 
 module.exports = router;

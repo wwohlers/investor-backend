@@ -12,39 +12,38 @@ const reSchema = mongoose.Schema({
     ref: 'User'
   },
 
-  //text: text of the post, with re:x corresponding to the re with id x.
+  //text: text of the post, with re:x corresponding to the re #x.
   text: {
     type: String,
     required: true,
     maxLength: 160
   },
 
-  //res: an array of the references made within this post.
+  // res: an array of the references made within this post.
   res: [{
-    //id: the unique id of this re (reference).
-    id: {
-      type: Number,
-      required: true,
-      unique: true
-    },
-
-    //type: the type of the reference, one of:
-    // - "portfolio"
-    // - "stock"
-    // - "re" (another post)
+    // type: the type of the reference, one of:
+    // - "p" (portfolio)
+    // - "s" (stock)
+    // - "r" (another post)
     type: {
       type: String,
       required: true,
       validate: value => {
         return value === "portfolio" || value === "stock" || value === "re";
       }
+    },
+
+    // id: the id of the portfolio, stock, or re
+    id: {
+      type: mongoose.Schema.Types.ObjectId,
     }
   }],
 
   //buys: the number of users who have bought this re:.
   buys: {
     type: Number,
-    required: true
+    required: true,
+    default: 0,
   }
 })
 

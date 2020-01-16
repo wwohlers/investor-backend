@@ -18,7 +18,7 @@ router.post('/stocks/', adminauth, async(req, res) => {
     await stock.save();
     res.status(201).send({ stock });
   } catch (error) {
-    res.status(500).send(error);
+    res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
 
@@ -28,14 +28,31 @@ router.get('/stocks/:ticker', async(req, res) => {
   try {
     const ticker = req.params.ticker;
     Stock.findOne({ ticker: ticker }, function(err, stock) {
+      if (err || !stock) {
+        const errMsg = "Fatal: " + err ? err : "Stock not found";
+        res.status(500).send(errMsg);
+        return;
+      }
+      res.status(200).send({ stock });
+    })
+  } catch (error) {
+    res.status(500).send("Fatal: caught error. Msg: " + error);
+  }
+})
+
+// GET /stocks/industry/:industry
+// Get a stock by industry
+router.get('/stocks/:ticker', async(req, res) => {
+  try {
+    const industry = req.params.ticker;
+    Stock.find({ industry: industry }, function(err, stocks) {
       if (err) {
         res.status(500).send(err);
         return;
       }
-      res.send({ stock });
+      res.status(200).send({ stocks });
     })
   } catch (error) {
-    res.status(500).send(error);
+    res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
-

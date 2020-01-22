@@ -22,9 +22,18 @@ const stockSchema = mongoose.Schema({
   
   //targetAvg: portfolio target price average. Null means no target prices.
   targetAvg: {
-    avg: Number,
-    sum: Number,
-    count: Number
+    avg: {
+      type: Number,
+      default: 0
+    },
+    sum: {
+      type: Number,
+      default: 0
+    },
+    count: {
+      type: Number,
+      default: 0
+    }
   },
 
   //buys: historical array of long pos minus short pos (counts). (0th element is today)
@@ -32,28 +41,23 @@ const stockSchema = mongoose.Schema({
     type: [Number],
   },
 
-  //res: information about the number of res about the stock.
-  res: {
-    //lastDay: hourly historical array of the number of res in the last day.
-    lastDay: [Number]
-  },
-
   //eyes: information about the number of portfolios that have this stock in eyes.
   eyes: {
-    type: [Number]
+    type: [Number],
+    default: [0],
   }
 })
 
-stockSchema.methods.addTarget(val) {
+stockSchema.methods.addTarget = async function(val) {
   this.targetAvg.sum += val;
   this.targetAvg.count++;
-  this.avg = this.targetAvg.sum / this.targetAvg.count;
+  this.targetAvg.avg = this.targetAvg.sum / Math.max(1, this.targetAvg.count);
 }
 
-stockSchema.methods.removeTarget(val) {
+stockSchema.methods.removeTarget = async function(val) {
   this.targetAvg.sum -= val;
   this.targetAvg.count--;
-  this.avg = this.targetAvg.sum / this.targetAvg.count;
+  this.targetAvg.avg = this.targetAvg.sum / Math.max(1, this.targetAvg.count);
 }
 
 const Stock = mongoose.model('Stock', stockSchema)

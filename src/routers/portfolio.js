@@ -16,7 +16,7 @@ router.post('/p/', auth, async (req, res) => {
   try {
     const {name, public, desc} = req.body;
 
-    let p;
+    let p = new Object;
     p.owner = mongoose.Types.ObjectId(req.user.id);
     p.name = name;
     p.public = public;
@@ -34,19 +34,41 @@ router.post('/p/', auth, async (req, res) => {
   }
 })
 
+// GET /p/
+// Gets all portfolios
+router.get('/p/', async(req, res) => {
+  try {
+    const ps = await Portfolio.find({}, 'id name owner')
+    if (!ps) {
+      res.status(500).send("Portfolios not found");
+      return;
+    }
+    res.send(ps);
+  } catch (error) {
+    res.status(500).send("Fatal: caught error. Msg: " + error);
+  }
+})
+
 // DELETE /p/:id
 // Deletes a portfolio
 router.delete('/p/:id', auth, async(req, res) => {
   try {
     const {id} = req.params;
-    writePortfolio(id, req.user, function(p) {
-      p.remove();
+    const p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+    p.remove();
 
-      req.user.portfolios.filter(p => p.id.toString() != id);
-      req.user.save();
+    req.user.portfolios = req.user.portfolios.filter(p => p.id.toString() != id);
+    req.user.save();
 
-      res.status(200).send("Deleted");
-    })
+    res.status(200).send("Deleted");
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -57,9 +79,16 @@ router.delete('/p/:id', auth, async(req, res) => {
 router.get('/p/:id', optauth, async(req, res) => {
   try {
     const {id} = req.params;
-    readPortfolio(id, req.user, function(p) {
-      res.status(200).send({ p });
-    })
+    const p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canRead(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+    res.status(200).send({ p });
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -72,13 +101,20 @@ router.put('/p/:id', auth, async(req, res) => {
   try {
     const {id} = req.params;
     const {name, public, desc} = req.body;
-    writePortfolio(id, req.user, function(p) {
-      p.name = name;
-      p.public = public;
-      p.desc = desc;
-      await p.save();
-      res.status(200).send({p});
-    })
+    let p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+    p.name = name;
+    p.public = public;
+    p.desc = desc;
+    await p.save();
+    res.status(200).send({p});
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -87,43 +123,55 @@ router.put('/p/:id', auth, async(req, res) => {
 // POST p/:id/buys
 // Adds/modifies the buy count of a stock, takes added count and price (NOT average price)
 // E.g. {buyPx: 50, count: 100} means adding 100 shares at the current price of 50, both numbers regardless of previous buys
-router.post('/p/:id/buys', auth, checkBuyFunds, async(req, res) => {
+router.post('/p/:id/buys', auth, async(req, res) => {
   try {
     const {id} = req.params;
     const {stock, buyPx, count} = req.body;
-    writePortfolio(id, req.user, function(p) {
-      Stock.findById(stock, function(err, s) {
-        if (err || !s) {
-          const errMsg = "Fatal: " + err ? err : "Stock not found";
-          res.status(500).send(errMsg);
-          return;
-        }
+    let p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+      
+    let s = await Stock.findById(stock);
+    if (!s) {
+      res.status(500).send("Stock not found");
+      return;
+    }
 
-        for (var i = 0; i < p.buys.length(); i++) {
-          if (p.buys[i].stock.toString() == stock) {
-            const oldCount = p.buys[i].count;
-            const oldPx = p.buys[i].buyPx;
-            const newCount = oldCount + count;
-            if (newCount != 0) {
-              const newPx = (oldCount * oldPx + count * buyPx) / (newCount);
-              p.buys[i].count = newCount;
-              p.buys[i].buyPx = newPx;
-            } else {
-              // the count is zero, so just remove it from buys
-              p.buys.splice(i, 1);
-              i--;
-            }
+    if (p.buys.length === 0) {
+      const stockid = mongoose.Types.ObjectId(stock);
+      p.buys.push({stock: stockid, buyPx: buyPx, count: count});
+    } else {
+      for (var i = 0; i < p.buys.length; i++) {
+        if (p.buys[i].stock.toString() == stock) {
+          const oldCount = p.buys[i].count;
+          const oldPx = p.buys[i].buyPx;
+          const newCount = oldCount + count;
+          if (newCount != 0) {
+            const newPx = (oldCount * oldPx + count * buyPx) / (newCount);
+            p.buys[i].count = newCount;
+            p.buys[i].buyPx = newPx;
+          } else {
+            // the count is zero, so just remove it from buys
+            p.buys.splice(i, 1);
+            i--;
           }
         }
-        await p.save();
+      }
+    }
 
-        //update stock buy counts
-        s.buys[0] += count;
-        await s.save();
+    //update stock buy counts
+    const oldCount = s.buys.shift();
+    s.buys.unshift(oldCount + count);
 
-        res.status(200).send({ p, s });
-      })
-    })
+    await s.save();
+    await p.save();    
+    res.status(200).send({ p, s });
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -135,31 +183,37 @@ router.post('/p/:id/eyes', auth, async(req, res) => {
   try {
     const {id} = req.params;
     const {stock} = req.body;
-    writePortfolio(id, req.user, function(p) {
-      Stock.findById(stock, function(err, stock) {
-        if (err || !stock) {
-          const errMsg = "Fatal: " + err ? err : "Stock not found";
-          res.status(500).send(errMsg);
-          return;
-        }
+    let p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+    
+    let s = await Stock.findById(stock);
+    if (!s) {
+      res.status(500).send("Stock not found");
+      return;
+    }
 
-        const oldLength = p.eyes.length();
-        p.eyes.filter(eye => {eye.toString() != stockid})
-        const existed = (oldLength - p.eyes.length() == 1);
+    const oldLength = p.eyes.length;
+    p.eyes = p.eyes.filter(eye => {eye.toString() != s.id.toString()})
+    const existed = (oldLength - p.eyes.length == 1);
 
-        if (!existed) {
-          p.eyes.push(mongoose.Types.ObjectId(stockid));
-          stock.eyes[0] += 1;
-        } else {
-          stock.eyes[0] -= 1;
-        }
+    const oldCount = s.eyes.shift();
+    if (!existed) {
+      p.eyes.push(mongoose.Types.ObjectId(s.id));
+      s.eyes.unshift(oldCount + 1);
+    } else {
+      s.eyes.unshift(oldCount - 1);
+    }
 
-        await p.save();
-        await stock.save();
-        
-        res.status(200).send({ p, stock });
-      })
-    })
+    await p.save();
+    await s.save();    
+    res.status(200).send({ p, s });
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -171,38 +225,52 @@ router.post('/p/:id/strats', auth, async(req, res) => {
   try {
     const {id} = req.params;
     const strat = req.body;
-    writePortfolio(id, req.user, function(p) {
-      p.strats.filter((s) => s.tag != strat.tag); // removes the strat with this tag, if it exists
-      for (var i = 0; i < strat.stocks.length(); i++) {
-        Stock.findById(strat.stocks[i], function(err, s) {
-          if (err || !s) {
-            const errMsg = "Fatal: " + err ? err : "Stock not found";
-            res.status(500).send(errMsg);
-            return;
-          }
-          strat.stocks[i] = s._id;
-        })
+    let p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+    p.strategies = p.strategies.filter((s) => s.tag != strat.tag); // removes the strat with this tag, if it exists
+      
+    for (var i = 0; i < strat.stocks.length; i++) {
+      let s = await Stock.findById(strat.stocks[i]);
+      if (!s) {
+        res.status(500).send("Stock not found");
+        return;
       }
-      p.strats.push(strat); // adds new strat
+      strat.stocks[i] = s._id;
+    }
+    p.strategies.push(strat); // adds new strat
 
-      await p.save();
-      res.status(200).send({ strat });
-    })
+    await p.save();
+    res.status(200).send({ p, strat });
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
 
-// DEL p/:id/strats/:tag
+// DEL p/:id/strats/
 // Delete a strat (by tag)
-router.delete('/p/:id/strats/:tag', auth, async(req, res) => {
+router.delete('/p/:id/strats/', auth, async(req, res) => {
   try {
-    const {id, tag} = req.params;
-    writePortfolio(id, req.user, function(p) {
-      p.strats.filter((s) => s.tag != tag); // removes the strat with this tag, if it exists
-      p.save();
-      res.status(200).send({ strat });
-    })
+    const {id} = req.params;
+    const {tag} = req.body;
+    let p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+    p.strategies = p.strategies.filter((s) => s.tag != tag);
+    await p.save();
+    res.status(200).send({ p });
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -214,127 +282,110 @@ router.post('/p/:id/targets', auth, async(req, res) => {
   try {
     const {id} = req.params;
     const target = req.body;
-    writePortfolio(id, req.user, function(p) {
-      Stock.findById(target.stock, function(error, stock) {
-        if (error || !stock) {
-          const errMsg = "Fatal: " + err ? err : "Stock not found";
-          res.status(500).send(errMsg);
-          return;
-        }
+    let p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+      
+    let stock = await Stock.findById(target.stock);
+    if (!stock) {
+      res.status(500).send("Stock not found");
+      return;
+    }
 
-        for (var i = 0; i < p.targets.length(); i++) {
-          if (p.targets[i].stock.toString() == target.stock) {
-            stock.removeTarget(p.targets[i].price);
-            p.targets.splice(i, 1);
-            i--;
-          }
-        }
+    for (var i = 0; i < p.targets.length; i++) {
+      if (p.targets[i].stock.toString() == target.stock) {
+        stock.removeTarget(p.targets[i].price);
+        p.targets.splice(i, 1);
+        i--;
+      }
+    }
 
-        target.stock = stock._id;
-        p.targets.push(target); // adds new target
-        stock.addTarget(target.price);
+    target.stock = stock._id;
+    p.targets.push(target); // adds new target
+    stock.addTarget(target.price);
 
-        await stock.save();
-        await p.save();
-
-        res.status(200).send({ target });
-      })
-    })
+    await stock.save();
+    await p.save();
+    res.status(200).send({ p, stock });
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
 
-// DEL p/:id/targets
+// DEL p/:id/targets/:stock
 // Delete a target price
 router.delete('/p/:id/targets/:stock', auth, async(req, res) => {
   try {
     const {id, stock} = req.params;
-    writePortfolio(id, req.user, function(p) {
-      if (!p.targets.find(t => t.stock.toString() === stock)) {
-        res.status(200).send("Fatal: No target exists for this stock");
-        return;
-      }
+    let p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+    if (!p.targets.some(t => t.stock.toString() === stock)) {
+      res.status(200).send("Fatal: No target exists for this stock");
+      return;
+    }
 
-      // Can assume that the target existed
-      p.targets.filter(t => t.stock.toString() != stock);
-      await p.save();
+    // Can assume that the target existed
+    const val = p.targets.find(t => t.stock.toString()).price;
+    p.targets = p.targets.filter(t => t.stock.toString() != stock);
 
-      Stock.findById(stock, function(error, stock) {
-        if (error || !stock) {
-          const errMsg = "Fatal: " + err ? err : "Stock not found";
-          res.status(500).send(errMsg);
-          return;
-        }
+    let s = await Stock.findById(stock)
+    if (!s) {
+      res.status(500).send("Stock not found");
+      return;
+    }
+    s.removeTarget(val);
 
-        stock.removeTarget(target.price);
-        await stock.save();
-
-        res.status(200).send("Deleted");
-      })
-    })
+    await s.save();
+    await p.save();
+    res.status(200).send({p, s});
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
 
 // POST p/:id/contributions
-// Add a new contribution
+// Add a new contribution (takes amount in body)
 router.post('/p/:id/contributions', auth, async(req, res) => {
   try {
     const {id} = req.params;
-    const contr = req.body;
+    const contr = {amount: req.body.amount};
     contr.date = Date.now();
 
-    writePortfolio(id, req.user, function(p) {
+    let p = await Portfolio.findById(id);
+    if (!p) {
+      res.status(500).send("Portfolio not found");
+      return;
+    }
+    if (!p.canWrite(req.user)) {
+      res.status(500).send("Unauthorized");
+      return;
+    }
+    const oldNet = p.overalls.netValue[0];
+    if (oldNet + contr.amount > -1) {
       p.overalls.contrHist.push(contr);
-      p.overalls.netValue[0] += contr.amount;
+      p.overalls.netValue.shift();
+      p.overalls.netValue.unshift(oldNet + contr.amount);
       await p.save();
       res.status(200).send({ contr, p });
-    })
+    } else {
+      res.status(500).send("Error: withdrawal amount exceeds available funds")
+    }
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
-
-// Gets a portfolio for writing
-function writePortfolio(id, user, callback) {
-  try {
-    Portfolio.findById(id, function(err, p) {
-      if (err || !p) {
-        const errMsg = "Fatal: " + err ? err : "Portfolio not found";
-        res.status(500).send(errMsg);
-        return;
-      }
-      if (!p.canWrite(user)) {
-        res.status(500).send("Unauthorized");
-        return;
-      }
-      callback(p);
-    })
-  } catch (error) {
-    res.status(500).send("Fatal: caught error. Msg: " + error);
-  }
-}
-
-// Gets a portfolio for reading
-function readPortfolio(id, user, callback) {
-  try {
-    Portfolio.findById(id, function(err, p) {
-      if (err || !p) {
-        const errMsg = "Fatal: " + err ? err : "Portfolio not found";
-        res.status(500).send(errMsg);
-        return;
-      }
-      if (!p.canRead(user)) {
-        res.status(500).send("Unauthorized");
-        return;
-      }
-      callback(p);
-    })
-  } catch (error) {
-    res.status(500).send("Fatal: caught error. Msg: " + error);
-  }
-}
 
 module.exports = router;

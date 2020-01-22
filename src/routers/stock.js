@@ -22,19 +22,32 @@ router.post('/stocks/', adminauth, async(req, res) => {
   }
 })
 
+// GET /stocks/
+// Get all stocks
+router.get('/stocks', async(req, res) => {
+  try {
+    const stocks = await Stock.find({});
+    if (!stocks) {
+      res.status(500).send("Stocks not found");
+      return;
+    }
+    res.status(200).send({ stocks });
+  } catch (error) {
+    res.status(500).send("Fatal: caught error. Msg: " + error);
+  }
+})
+
 // GET /stocks/:ticker
 // Get a stock by ticker
 router.get('/stocks/:ticker', async(req, res) => {
   try {
     const ticker = req.params.ticker;
-    Stock.findOne({ ticker: ticker }, function(err, stock) {
-      if (err || !stock) {
-        const errMsg = "Fatal: " + err ? err : "Stock not found";
-        res.status(500).send(errMsg);
-        return;
-      }
-      res.status(200).send({ stock });
-    })
+    const stock = Stock.findOne({ ticker: ticker });
+    if (!stock) {
+      res.status(500).send("Stock not found");
+      return;
+    }
+    res.status(200).send({ stock });
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -42,10 +55,10 @@ router.get('/stocks/:ticker', async(req, res) => {
 
 // GET /stocks/industry/:industry
 // Get a stock by industry
-router.get('/stocks/:ticker', async(req, res) => {
+router.get('/stocks/industry/:industry', async(req, res) => {
   try {
-    const industry = req.params.ticker;
-    Stock.find({ industry: industry }, function(err, stocks) {
+    const industry = req.params.industry;
+    Stock.find({ industry: industry }, async(err, stocks) => {
       if (err) {
         res.status(500).send(err);
         return;
@@ -56,3 +69,5 @@ router.get('/stocks/:ticker', async(req, res) => {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
+
+module.exports = router;

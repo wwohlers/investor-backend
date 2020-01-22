@@ -16,11 +16,32 @@ const router = express.Router();
 // Gives the logged in user info and their generated token
 router.post('/users', async (req, res) => {
   try {
+    req.body.tokens = [];
+    req.body.portfolios = [];
+    req.body.following = [];
+    req.body.rebuys = [];
+    req.body.strategies = [];
+    req.body.admin = false;
     const user = new User(req.body);
     user.admin = false;
     await user.save();
     const token = await user.generateAuthToken();
     res.status(200).send({ user, token });
+  } catch (error) {
+    res.status(500).send("Fatal: caught error. Msg: " + error);
+  }
+})
+
+// GET users
+// Gets a list of all users
+router.get('/users', async(req, res) => {
+  try {
+    const users = await User.find({}, 'id name email');
+    if (!users) {
+      res.status(500).send("No users found");
+      return;
+    }
+    res.send(users);
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -92,15 +113,12 @@ router.post('/users/me/logoutall', auth, async(req, res) => {
 router.get('/users/:id', async(req, res) => {
 	try {
 		const id = req.params.id;
-		User.findById(id, function(err, user) {
-			if (err) {
-				res.status(500).send("Fatal: " + err);
-			} 
-			if (!user) {
-				res.status(400).send("Fatal: user not found");
-			}
-			res.status(200).send(user);
-		})
+		const user = await User.findById(id)
+    if (!user) {
+      res.status(400).send("Fatal: user not found");
+      return;
+    }
+    res.status(200).send(user);
 	} catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
 	}
@@ -137,15 +155,17 @@ router.put('/users/password', auth, async(req, res) => {
 
 // POST /users/follow/:id
 // Follow/unfollow a portfolio
-router.post('/users/follow', auth, async(req, res) => {
+router.post('/users/follow/:id', auth, async(req, res) => {
   try {
     const pid = req.params.id;
-    const oldLength = req.user.following.length();
+    const oldLength = req.user.following.length;
 
-    req.user.following.filter(p => p.toString() != pid);
-    const removed = (oldLength - req.user.following.length() === 1);
+    req.user.following = req.user.following.filter(p => {
+      p.toString() != pid.toString();
+    });
+    const removed = (oldLength - req.user.following.length === 1);
 
-    Portfolio.findById(pid, function(err, p) {
+    Portfolio.findById(pid, async(err, p) => {
       if (err || !p) {
         const errMsg = "Fatal: " + err ? err : "Portfolio not found";
         res.status(500).send(errMsg);
@@ -197,14 +217,14 @@ router.put('/users/settings', auth, async(req, res) => {
 router.post('/users/re/:id', auth, async(req, res) => {
   try {
     const reid = req.params.id;
-    const oldLength = u.rebuys.length();
+    const oldLength = req.user.rebuys.length;
 
-    req.user.rebuys.filter(re => re.toString() != reid);
-    const removed = (req.user.rebuys.length() - oldLength === 1);
+    req.user.rebuys = req.user.rebuys.filter(re => re.toString() != reid.toString());
+    const removed = (oldLength - req.user.rebuys.length === 1);
 
     // add/subtract to # of buys on re
-    Re.findById(reid, function(err, re) {
-      if (err || !p) {
+    Re.findById(reid, async(err, re) => {
+      if (err || !re) {
         const errMsg = "Fatal: " + err ? err : "Portfolio not found";
         res.status(500).send(errMsg);
         return;
@@ -215,9 +235,10 @@ router.post('/users/re/:id', auth, async(req, res) => {
       } else {
         re.buys -= 1;
       }
+    
       await req.user.save();
       await re.save();
-      res.status(200).send({reid});
+      res.status(200).send(req.user);
     })
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);

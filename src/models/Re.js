@@ -29,12 +29,12 @@ const reSchema = mongoose.Schema({
       type: String,
       required: true,
       validate: value => {
-        return value === "portfolio" || value === "stock" || value === "re";
+        return value === "p" || value === "s" || value === "r";
       }
     },
 
     // id: the id of the portfolio, stock, or re
-    id: {
+    refid: {
       type: mongoose.Schema.Types.ObjectId,
     }
   }],
@@ -46,6 +46,30 @@ const reSchema = mongoose.Schema({
     default: 0,
   }
 })
+
+reSchema.statics.getById = async(id) => {
+  try {
+    const re = await Re.findById(id);
+    if (!re) {
+      return false;
+    }
+    return re;
+  } catch (error) {
+    return false;
+  }
+}
+
+reSchema.statics.get = async(conditions, projection = '') => {
+  try {
+    const res = await Re.find(conditions, projection);
+    if (!res) {
+      return false;
+    }
+    return res;
+  } catch (error) {
+    return false;
+  }
+}
 
 const Re = mongoose.model('Re', reSchema)
 

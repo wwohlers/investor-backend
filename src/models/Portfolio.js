@@ -27,7 +27,6 @@ const portfolioSchema = mongoose.Schema({
   //desc: description of the portfolio.
   desc: {
     type: String,
-    required: true,
     minlength: 1,
     maxlength: 160
   },
@@ -88,7 +87,12 @@ const portfolioSchema = mongoose.Schema({
     //bullorbear: "bull" if the strategy is a bull strategy, "bear" if a bear strategy.
     bullorbear: {
       type: String,
-      required: false
+      required: false,
+      validate: value => {
+        if (value != "bear" && value != "bull") {
+          throw new Error("Error: bullorbear must be 'bull' or 'bear'");
+        }
+      }
     },
 
     //stocks: array of stock ids that this strategy is attached to.
@@ -118,15 +122,24 @@ const portfolioSchema = mongoose.Schema({
   //overalls: overall numbers of this portfolio.
   overalls: {
     //buyGains: historical array of percent gains/losses of bought stocks, last 365 days.
-    buyGains: [Number],
+    buyGains: {
+      type: [Number],
+      default: [0]
+    },
 
     //eyeGains: historical array of percent gains/losses of eyed stocks, last 365 days.
-    eyeGains: [Number],
+    eyeGains: {
+      type: [Number],
+      default: [0]
+    },
 
     //Note that the buyGains and eyeGains track gains and losses as they happened with stocks that were in the portfolio at the time.
 
     //netValue: historical array of the net liquidating value of the portfolio.
-    netValue: [Number],
+    netValue: {
+      type: [Number],
+      default: [0]
+    },
 
     //contrHist: array of contributions, each representing a contribution/withdrawal to/from the account.
     contrHist: [{

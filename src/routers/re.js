@@ -18,21 +18,21 @@ router.post('/res/', auth, async(req, res) => {
     const re = new Re(req.body);
     re.author = req.user._id;
     re.buys = 0;
-    for (var i = 0; i < re.res.length(); i++) {
+    for (var i = 0; i < re.res.length; i++) {
       const r = re.res[i];
-      const failure = false;
+      let failure = false;
       if (r.type == "s") {
-        failure = !(await Stock.exists({id: r.id}));
+        failure = !(await Stock.exists({_id: r.refid}));
       } else if (r.type == "p") {
-        failure = !(await Portfolio.exists({id: r.id}));
+        failure = !(await Portfolio.exists({_id: r.refid}));
       } else {
-        failure = !(await Re.exists({id = r.id}));
+        failure = !(await Re.exists({_id: r.refid}));
       }
       if (failure) {
-        res.status(500).send("Fatal: failed to identify re with type '" + re.type + "' and id " + re._id);
+        res.status(500).send("Fatal: failed to identify re with type '" + r.type + "' and id " + r.refid);
+        return;
       }
     }
-
     await re.save();
     res.status(200).send({re});
   } catch (error) {
@@ -42,17 +42,15 @@ router.post('/res/', auth, async(req, res) => {
 
 // GET /res/:id
 // Get re: by id
-router.post('/res/:id', async(req, res) => {
+router.get('/res/:id', async(req, res) => {
   try {
     const id = req.params.id;
-    Re.findById(id, function(err, re) {
-      if (err || !re) {
-        const errMsg = "Fatal: " + err ? err : "Re not found";
-        res.status(500).send(errMsg);
-        return;
-      }
-      res.status(200).send({re});
-    })
+    const re = await Re.findById(id);
+    if (!re) {
+      res.status(500).send("Re not found");
+      return;
+    }
+    res.status(200).send({re});
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
@@ -63,37 +61,36 @@ router.post('/res/:id', async(req, res) => {
 router.get('/res/users/:id', async(req, res) => {
   try {
     const userid = mongoose.Types.ObjectId(req.params.id);
-    Re.find({author: userid}, function(err, rs) {
-      if (err) {
-        res.status(500).send(err);
-        return;
-      }
-      res.status(200).send({rs});
-    })
+    const rs = await Re.find({author: userid})
+    if (!rs) {
+      res.status(500).send("No res found");
+      return;
+    }
+    res.status(200).send({rs});
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
 
-// GET /res/:type/:id
+// GET /res/:type/:refid
 // Get res with a re pertaining to a given :type with given :id
-router.get('/re/sstock/:id', async(req, res) => {
+router.get('/res/:type/:refid', async(req, res) => {
   try {
-    const stockid = req.params.id;
-    const type = req.params.type;
-    Re.find({}, function(err, rs) {
-      if (err) {
-        res.status(500).send(err);
-        return;
-      }
-      rs.filter(re => {
-        return re.res.some(ref => {
-          ref.id.toString() == stockid && ref.type == type;
-        })
-      });
-      res.status(200).send({rs});
-    })
+    const {type, refid} = req.params;
+    let rs = await Re.find({});
+    if (err) {
+      res.status(500).send(err);
+      return;
+    }
+    rs = rs.filter(re => {
+      return re.res.some(ref => {
+        return ref.refid.toString() == refid && ref.type == type;
+      })
+    });
+    res.status(200).send({rs});
   } catch (error) {
     res.status(500).send("Fatal: caught error. Msg: " + error);
   }
 })
+
+module.exports = router;
